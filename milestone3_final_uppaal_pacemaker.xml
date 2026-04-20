@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Channels for synchronization between Heart, Ventricle controller, and Observer
+//chan VSense, VPace;
+broadcast chan VSense;   // intrinsic ventricular sense
+broadcast chan VPace;    // ventricular pace
+
+// Timing Parameters from the project specs (converted from bpm to milliseconds)
+// Formula: Interval (ms) = 60,000 / Rate (bpm)
+
+// --- Timing Parameters from project specs ---
+//Given Constants: LRL = 40 bpm, URL = 180 bpm, HRL = 37.5 bpm, VRP = 150 ms
+const int LRI = 1500; // Lower Rate Limit Interval (LRI) = 60,000/LowerRateLimit = 1500 ms/beat
+const int URI = 333;  // Upper Rate Limit Interval (URI) = 60,000/UpperRateLimit = 333 ms/beat
+const int HRI = 1600; // Hysteresis Rate Limit Interval (HRI) = 60,000/HysteresisRateLimit = 1600 ms/beat
+const int VRP = 150;  // Ventricular Refractory Period (ms) - given constant</declaration>
+	<template>
+		<name>RandomHeart</name>
+		<declaration>clock t; // Measures time between intrinsic beats
+
+// Heart intrinsic beat timing parameters
+const int minwait = 200;   // min intrinsic beat interval (ms) (250 bpm) - allow it to be faster than upper rate limit interval to test edge cases
+const int maxwait = 2000;  // max intrinsic beat interval (ms) (30 bpm)- make it larger than HRL_Interval, so theoretically should never use this time</declaration>
+		<location id="id0" x="8" y="-110">
+			<name x="34" y="-127">Idle</name>
+			<committed/>
+		</location>
+		<location id="id1" x="-399" y="-110">
+			<name x="-467" y="-127">Ready</name>
+			<label kind="invariant" x="-526" y="-110">t &lt;= maxwait</label>
+			<label kind="comments" x="-433" y="-221">Random Heart</label>
+		</location>
+		<init ref="id1"/>
+		<transition id="id2">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="-221" y="-42">t = 0</label>
+			<nail x="-119" y="-17"/>
+			<nail x="-272" y="-17"/>
+		</transition>
+		<transition id="id3">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-263" y="-212">VPace?</label>
+			<label kind="assignment" x="-204" y="-212">t = 0</label>
+			<nail x="-272" y="-195"/>
+			<nail x="-119" y="-195"/>
+		</transition>
+		<transition id="id4">
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="guard" x="-331" y="-127">t &gt;= minwait</label>
+			<label kind="synchronisation" x="-212" y="-127">VSense!</label>
+			<label kind="assignment" x="-136" y="-127">t = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>VentricleController</name>
+		<declaration>clock x;          // Tracks time since last ventricular event
+int RI = LRI;     // Current pacing interval (starts at LRI)
+
+// Hysteresis / pacing control variables
+bool hp = false;  // Hysteresis pacing enable flag
+bool hpEnable = false;
+bool started = false;
+</declaration>
+		<location id="id5" x="17" y="-8">
+			<name x="-59" y="-17">WaitRI</name>
+			<label kind="invariant" x="-59" y="8">x&lt;=RI</label>
+			<label kind="comments" x="-8" y="-153">Ventricle Controller</label>
+		</location>
+		<location id="id6" x="509" y="-8">
+			<name x="535" y="-17">WaitVRP</name>
+			<label kind="invariant" x="535" y="8">x&lt;=VRP</label>
+		</location>
+		<init ref="id5"/>
+		<transition id="id7">
+			<source ref="id6"/>
+			<target ref="id5"/>
+			<label kind="guard" x="348" y="59">x&gt;=VRP</label>
+			<label kind="assignment" x="110" y="59">hpEnable=hp, started = true</label>
+			<nail x="382" y="76"/>
+			<nail x="135" y="76"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="guard" x="136" y="-110">x&gt;=RI</label>
+			<label kind="synchronisation" x="187" y="-110">VPace!</label>
+			<label kind="assignment" x="246" y="-110">x=0, hp=false, RI=LRI</label>
+			<nail x="144" y="-93"/>
+			<nail x="382" y="-93"/>
+		</transition>
+		<transition id="id9">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="110" y="-25">VSense?</label>
+			<label kind="assignment" x="178" y="-25">x=0, hp=true, RI=HRI</label>
+		</transition>
+	</template>
+	<template>
+		<name>Observer</name>
+		<declaration>clock tv;                // Measures time since last ventricular event
+bool vstarted = false;  // flag indicating if measurement started
+
+
+</declaration>
+		<location id="id10" x="0" y="0">
+			<name x="-34" y="25">WaitRI</name>
+			<label kind="comments" x="-119" y="-178">Observer</label>
+		</location>
+		<location id="id11" x="0" y="-187">
+			<name x="-25" y="-221">VSensed</name>
+			<committed/>
+		</location>
+		<location id="id12" x="178" y="0">
+			<name x="168" y="-34">VPaced</name>
+			<committed/>
+		</location>
+		<init ref="id10"/>
+		<transition id="id13">
+			<source ref="id12"/>
+			<target ref="id10"/>
+			<label kind="assignment" x="68" y="76">tv = 0</label>
+			<nail x="93" y="76"/>
+		</transition>
+		<transition id="id14">
+			<source ref="id10"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="68" y="-25">VPace?</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id11"/>
+			<target ref="id10"/>
+			<label kind="assignment" x="76" y="-127">tv = 0, vstarted = true</label>
+			<nail x="68" y="-102"/>
+		</transition>
+		<transition id="id16">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="synchronisation" x="-68" y="-110">VSense?</label>
+		</transition>
+	</template>
+	<system>// Edit system definition
+system RandomHeart, VentricleController, Observer;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>System does not deadlock.</comment>
+			<result outcome="success" type="quality" timestamp="2025-11-25 14:09:39 -0800">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (!VentricleController.hpEnable imply Observer.tv &lt;= LRI)</formula>
+			<comment>PropLRI: If hysteresis mode is disabled, pacemaker should not pace intervals longer than Lower Rate Interval (LRI).
+-guaranteed by code</comment>
+			<result outcome="success" type="quality" timestamp="2025-12-09 15:21:41 -0500">
+			</result>
+		</query>
+		<query>
+			<formula>A[] ((VentricleController.WaitRI &amp;&amp; VentricleController.started) imply VentricleController.x &gt;=VRP)</formula>
+			<comment>PropVRP: The pacemaker cannot sense beats before VRP has elapsed</comment>
+			<result outcome="success" type="quality" timestamp="2025-12-11 12:19:44 -0500">
+			</result>
+		</query>
+		<query>
+			<formula>A[] (VentricleController.hpEnable imply Observer.tv &lt;=HRI)</formula>
+			<comment>PropHRI: If hysteresis pacing is activated, a ventricular pace or sense should be no later than HRI.</comment>
+			<result outcome="success" type="quality" timestamp="2025-12-09 15:26:21 -0500">
+			</result>
+		</query>
+	</queries>
+</nta>
